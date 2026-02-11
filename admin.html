@@ -1,157 +1,164 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>March Madness Leaderboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <title>Admin Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #111827;
-      color: white;
-      text-align: center;
-    }
-
-    h1 {
-      margin-top: 30px;
-      font-size: 36px;
-      color: #facc15;
-    }
-
-    .counts {
-      margin: 20px;
-      font-size: 18px;
-    }
-
-    .section {
-      margin: 40px auto;
-      max-width: 600px;
-    }
-
-    .section h2 {
-      border-bottom: 2px solid #facc15;
-      padding-bottom: 10px;
-    }
-
-    .card {
-      background: #1f2937;
-      padding: 15px;
-      margin: 10px 0;
-      border-radius: 8px;
-      display: flex;
-      justify-content: space-between;
-      font-size: 16px;
-    }
-
-    .alive {
-      border-left: 6px solid #22c55e;
-    }
-
-    .eliminated {
-      border-left: 6px solid #ef4444;
-      opacity: 0.6;
-    }
-  </style>
+  <!-- ✅ Correct Supabase UMD build -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 
 <body>
 
-<h1>🏀 March Madness Leaderboard</h1>
+<h2>Admin – Enter Scores</h2>
 
-<div class="counts">
-  <span id="aliveCount"></span> |
-  <span id="eliminatedCount"></span>
-</div>
+<select id="roundSelect">
+  <option value="1">Round 1</option>
+  <option value="2">Round 2</option>
+  <option value="3">Sweet 16</option>
+  <option value="4">Elite 8</option>
+  <option value="5">Final 4</option>
+  <option value="6">Championship</option>
+</select>
 
-<div class="section">
-  <h2>🔥 Still Alive</h2>
-  <div id="aliveList"></div>
-</div>
+<button id="loadBtn">Load Games</button>
+<button id="processBtn">Process Round</button>
 
-<div class="section">
-  <h2>💀 Eliminated</h2>
-  <div id="eliminatedList"></div>
-</div>
+<div id="gamesContainer"></div>
 
 <script>
-const supabaseUrl = "https://vlyrdolffrcpaaszjdtv.supabase.co";
-const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"; // replace this
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+document.addEventListener("DOMContentLoaded", function () {
 
-async function loadLeaderboard() {
+  const supabaseUrl = "https://vlyrdolffrcpaaszjdtv.supabase.co";
+  const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs";  // your anon key
 
-  const { data, error } = await supabase
-    .from("team_ownership")
-    .select(`
-      entrant_id,
-      entrants (
-        name,
-        is_alive
-      ),
-      teams (
-        name
-      )
-    `);
+  const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-  if (error) {
-    console.error(error);
-    return;
-  }
+  const roundSelect = document.getElementById("roundSelect");
+  const gamesContainer = document.getElementById("gamesContainer");
 
-  const alive = [];
-  const eliminated = [];
+  document.getElementById("loadBtn").addEventListener("click", loadGames);
+  document.getElementById("processBtn").addEventListener("click", processRound);
 
-  data.forEach(row => {
+  async function loadGames() {
+    const round = roundSelect.value;
 
-    if (!row.entrants) return;
+    const { data, error } = await db
+      .from("games")
+      .select(`
+        id,
+        spread,
+        team1:team1_id(name),
+        team2:team2_id(name),
+        team1_id,
+        team2_id
+      `)
+      .eq("round", round)
+      .order("id");
 
-    const entry = {
-      name: row.entrants.name,
-      team: row.teams ? row.teams.name : "—",
-      is_alive: row.entrants.is_alive
-    };
-
-    if (entry.is_alive) {
-      alive.push(entry);
-    } else {
-      eliminated.push(entry);
+    if (error) {
+      console.error(error);
+      alert("Error loading games");
+      return;
     }
 
-  });
+    gamesContainer.innerHTML = "";
 
-  renderSection("aliveList", alive, "alive");
-  renderSection("eliminatedList", eliminated, "eliminated");
+    data.forEach(game => {
 
-  document.getElementById("aliveCount").innerText =
-    `Alive: ${alive.length}`;
+      const gameDiv = document.createElement("div");
+      gameDiv.style.border = "1px solid #ccc";
+      gameDiv.style.padding = "15px";
+      gameDiv.style.margin = "10px";
 
-  document.getElementById("eliminatedCount").innerText =
-    `Eliminated: ${eliminated.length}`;
-}
+      gameDiv.innerHTML = `
+        <h3>${game.team1.name} vs ${game.team2.name}</h3>
+        <p>Spread: ${game.spread} (applies to Team 1)</p>
 
-function renderSection(elementId, list, cssClass) {
+        <input type="number" id="t1_${game.id}" placeholder="Team 1 Score">
+        <input type="number" id="t2_${game.id}" placeholder="Team 2 Score">
 
-  const container = document.getElementById(elementId);
-  container.innerHTML = "";
+        <button data-id="${game.id}"
+                data-team1="${game.team1_id}"
+                data-team2="${game.team2_id}"
+                data-spread="${game.spread}">
+          Save Game
+        </button>
+      `;
 
-  list.sort((a, b) => a.name.localeCompare(b.name));
+      const saveBtn = gameDiv.querySelector("button");
 
-  list.forEach(entry => {
-    container.innerHTML += `
-      <div class="card ${cssClass}">
-        <span>${entry.name}</span>
-        <span>${entry.team}</span>
-      </div>
-    `;
-  });
-}
+      saveBtn.addEventListener("click", async function () {
+        await saveGame(
+          this.dataset.id,
+          this.dataset.team1,
+          this.dataset.team2,
+          parseFloat(this.dataset.spread)
+        );
+      });
 
-loadLeaderboard();
+      gamesContainer.appendChild(gameDiv);
+    });
+  }
 
-// 🔄 Auto refresh every 30 seconds
-setInterval(loadLeaderboard, 30000);
+  async function saveGame(gameId, team1Id, team2Id, spread) {
 
+    const team1Score = parseInt(document.getElementById(`t1_${gameId}`).value);
+    const team2Score = parseInt(document.getElementById(`t2_${gameId}`).value);
+
+    if (isNaN(team1Score) || isNaN(team2Score)) {
+      alert("Enter both scores");
+      return;
+    }
+
+    let winnerTeamId;
+    let coverTeamId;
+
+    // Winner logic
+    winnerTeamId = team1Score > team2Score ? team1Id : team2Id;
+
+    // Cover logic (spread applies to Team 1)
+    const adjustedTeam1 = team1Score + spread;
+    coverTeamId = adjustedTeam1 > team2Score ? team1Id : team2Id;
+
+    const { error } = await db
+      .from("games")
+      .update({
+        team1_score: team1Score,
+        team2_score: team2Score,
+        winner_team_id: winnerTeamId,
+        cover_team_id: coverTeamId
+      })
+      .eq("id", gameId);
+
+    if (error) {
+      console.error(error);
+      alert("Error saving game");
+      return;
+    }
+
+    alert("Game saved successfully");
+  }
+
+  async function processRound() {
+    const round = parseInt(roundSelect.value);
+
+    const { error } = await db.rpc("process_round", {
+      p_round: round   // 🔥 match your SQL parameter name exactly
+    });
+
+    if (error) {
+      console.error(error);
+      alert("Error processing round");
+      return;
+    }
+
+    alert("Round processed successfully");
+  }
+
+});
 </script>
 
 </body>
 </html>
+
