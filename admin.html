@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>March Madness Pool – Admin</title>
+  <link rel="icon" href="data:,">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+    }
+
+    h3 {
+      margin-top: 30px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 8px 14px;
+      margin-right: 10px;
+      margin-top: 5px;
+      cursor: pointer;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    .danger {
+      background-color: #c0392b;
+      color: white;
+      border: none;
+    }
+
+    .secondary {
+      background-color: #444;
+      color: white;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Admin Panel</h2>
+  <button id="logoutBtn" class="secondary">Logout</button>
+
+  <hr>
+
+  <h3>Pool Settings</h3>
+
+  <label>
+    <input type="checkbox" id="picksOpen">
+    Picks Open
+  </label>
+
+  <label>
+    Current Round
+    <input type="number" id="currentRound" min="1">
+  </label>
+
+  <label>
+    Admin Message
+    <textarea id="adminMessage" rows="3"></textarea>
+  </label>
+
+  <button id="saveBtn">Save Settings</button>
+  <div id="settingsStatus" class="status"></div>
+
+  <hr>
+
+  <h3>Game Controls</h3>
+
+  <button id="processGamesBtn" class="danger">Process All Games</button>
+  <button id="lockSpreadsBtn">Lock Spreads (Current Round)</button>
+  <button id="unlockSpreadsBtn">Unlock All Spreads</button>
+
+  <div id="gameStatus" class="status"></div>
+
+  <!-- Supabase JS (ONLY ONCE) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", async function () {
+
+      /* ============================
+         CONFIG
+      ============================ */
+
+      const SUPABASE_URL = "https://vlyrdolffrcpaaszjdtv.supabase.co"
+      const SUPABASE_ANON_KEY = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs" // your anon key
+
+      const supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+      )
+
+      /* ============================
+         ELEMENTS
+      ============================ */
+
+      const logoutBtn = document.getElementById("logoutBtn")
+      const saveBtn = document.getElementById("saveBtn")
+      const settingsStatus = document.getElementById("settingsStatus")
+
+      const picksOpenCheckbox = document.getElementById("picksOpen")
+      const currentRoundInput = document.getElementById("currentRound")
+      const adminMessageInput = document.getElementById("adminMessage")
+
+      const processGamesBtn = document.getElementById("processGamesBtn")
+      const lockSpreadsBtn = document.getElementById("lockSpreadsBtn")
+      const unlockSpreadsBtn = document.getElementById("unlockSpreadsBtn")
+      const gameStatusDiv = document.getElementById("gameStatus")
+
+      /* ============================
+         AUTH PROTECTION
+      ============================ */
+
+      const { data: sessionData } = await supabaseClient.auth.getSession()
+      if (!sessionData.session) {
+        window.location.href = "index.html"
+        return
+      }
+
+      /* ============================
+         LOAD SETTINGS
+      ============================ */
+
+      async function loadSettings() {
+        const { data, error } = await supabaseClient
+          .from("settings")
+          .select("*")
+          .eq("id", 1)
+          .single()
+
+        if (error) {
+          settingsStatus.textContent = error.message
+          return
+        }
+
+        picksOpenCheckbox.checked = data.picks_open
+        currentRoundInput.value = data.current_round
+        adminMessageInput.value = data.admin_message || ""
+      }
+
+      /* ============================
+         SAVE SETTINGS
+      ============================ */
+
+      async function saveSettings() {
+        settingsStatus.textContent = "Saving..."
+
+        const { error } = await supabaseClient
+          .from("settings")
+          .update({
+            picks_open: picksOpenCheckbox.checked,
+            current_round: Number(currentRoundInput.value),
+            admin_message: adminMessageInput.value,
+            updated_at: new Date()
+          })
+          .eq("id", 1)
+
+        if (error) {
+          settingsStatus.textContent = error.message
+          return
+        }
+
+        settingsStatus.textContent = "✅ Settings saved"
+      }
+
+      /* ============================
+         GAME ACTIONS
+      ============================ */
+
+      async function processAllGames() {
+        if (!confirm("Are you sure you want to process all games?")) return
+
+        gameStatusDiv.textContent = "Processing..."
+
+        const { error } = await supabaseClient.rpc("process_all_games")
+
+        if (error) {
+          gameStatusDiv.textContent = error.message
+          return
+        }
+
+        gameStatusDiv.textContent = "✅ All games processed"
+      }
+
+      async function lockSpreads() {
+        const round = Number(currentRoundInput.value)
+
+        const { error } = await supabaseClient
+          .from("games")
+          .update({ spreads_locked: true })
+          .eq("round", round)
+
+        if (error) {
+          gameStatusDiv.textContent = error.message
+          return
+        }
+
+        gameStatusDiv.textContent = `🔒 Spreads locked for round ${round}`
+      }
+
+      async function unlockSpreads() {
+        if (!confirm("Unlock ALL spreads?")) return
+
+        const { error } = await supabaseClient
+          .from("games")
+          .update({ spreads_locked: false })
+
+        if (error) {
+          gameStatusDiv.textContent = error.message
+          return
+        }
+
+        gameStatusDiv.textContent = "🔓 All spreads unlocked"
+      }
+
+      /* ============================
+         LOGOUT
+      ============================ */
+
+      async function logout() {
+        await supabaseClient.auth.signOut()
+        window.location.href = "index.html"
+      }
+
+      /* ============================
+         EVENT LISTENERS
+      ============================ */
+
+      logoutBtn.addEventListener("click", logout)
+      saveBtn.addEventListener("click", saveSettings)
+      processGamesBtn.addEventListener("click", processAllGames)
+      lockSpreadsBtn.addEventListener("click", lockSpreads)
+      unlockSpreadsBtn.addEventListener("click", unlockSpreads)
+
+      loadSettings()
+
+    })
+  </script>
+
+</body>
+</html>
+
+
