@@ -1,61 +1,162 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Leaderboard</title>
+  <title>March Madness Leaderboard</title>
+  <link rel="icon" href="data:,">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: white;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+
+    h1 {
+      color: #f44336;
+      margin-bottom: 10px;
+    }
+
+    .summary {
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+
+    .section {
+      margin-top: 30px;
+    }
+
+    .section h2 {
+      border-bottom: 2px solid #444;
+      padding-bottom: 5px;
+    }
+
+    .card {
+      background: #1e1e1e;
+      padding: 12px;
+      margin: 8px auto;
+      max-width: 500px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .alive {
+      border-left: 6px solid #4caf50;
+    }
+
+    .eliminated {
+      border-left: 6px solid #e53935;
+      opacity: 0.6;
+    }
+
+    .team {
+      font-weight: bold;
+      color: #ffcc00;
+    }
+  </style>
 </head>
 <body>
 
-<h1>Leaderboard</h1>
-<div id="leaderboard">Loading...</div>
+  <h1>🏀 March Madness Survivor</h1>
 
-<!-- Load Supabase ONCE -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <div class="summary" id="summary">
+    Loading...
+  </div>
 
-<script>
-document.addEventListener("DOMContentLoaded", async function () {
+  <div class="section">
+    <h2>🟢 Still Alive</h2>
+    <div id="alive-list"></div>
+  </div>
 
-  const SUPABASE_URL = "https://vlyrdolffrcpaaszjdtv.supabase.co"
-  const SUPABASE_ANON_KEY = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"
+  <div class="section">
+    <h2>🔴 Eliminated</h2>
+    <div id="eliminated-list"></div>
+  </div>
 
-  // CREATE CLIENT ONCE
-  const supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY
-  )
+  <!-- Supabase (LOAD ONCE) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 
-  async function loadLeaderboard() {
+  <script>
+    document.addEventListener("DOMContentLoaded", async function () {
 
-    const { data, error } = await supabaseClient
-      .from("entrants")
-      .select("id, name, is_alive")
-      .order("is_alive", { ascending: false })
-      .order("name", { ascending: true })
+      const SUPABASE_URL = "https://vlyrdolffrcpaaszjdtv.supabase.co"
+      const SUPABASE_ANON_KEY = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"
 
-    if (error) {
-      console.error(error)
-      document.getElementById("leaderboard").innerText =
-        "Error loading data"
-      return
-    }
+      const supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY
+      )
 
-    const container = document.getElementById("leaderboard")
-    container.innerHTML = ""
+      async function loadLeaderboard() {
 
-    data.forEach(entry => {
-      const row = document.createElement("div")
-      row.innerHTML = `
-        <strong>${entry.name}</strong> -
-        ${entry.is_alive ? "🟢 Alive" : "🔴 Eliminated"}
-      `
-      container.appendChild(row)
+        const { data, error } = await supabaseClient
+          .from("entrants")
+          .select(`
+            id,
+            name,
+            is_alive,
+            teams ( name )
+          `)
+          .order("name", { ascending: true })
+
+        if (error) {
+          console.error(error)
+          document.getElementById("summary").innerText = "Error loading data"
+          return
+        }
+
+        const aliveDiv = document.getElementById("alive-list")
+        const eliminatedDiv = document.getElementById("eliminated-list")
+
+        aliveDiv.innerHTML = ""
+        eliminatedDiv.innerHTML = ""
+
+        let aliveCount = 0
+        let eliminatedCount = 0
+
+        data.forEach(entry => {
+
+          const teamName = entry.teams?.name || "—"
+          const card = document.createElement("div")
+          card.classList.add("card")
+
+          if (entry.is_alive) {
+            card.classList.add("alive")
+            aliveCount++
+          } else {
+            card.classList.add("eliminated")
+            eliminatedCount++
+          }
+
+          card.innerHTML = `
+            <div>${entry.name}</div>
+            <div class="team">${teamName}</div>
+          `
+
+          if (entry.is_alive) {
+            aliveDiv.appendChild(card)
+          } else {
+            eliminatedDiv.appendChild(card)
+          }
+        })
+
+        document.getElementById("summary").innerHTML =
+          `<strong>${aliveCount}</strong> Alive | 
+           <strong>${eliminatedCount}</strong> Eliminated`
+      }
+
+      // Load immediately
+      loadLeaderboard()
+
+      // Auto refresh every 30 seconds
+      setInterval(loadLeaderboard, 30000)
+
     })
-  }
-
-  loadLeaderboard()
-
-})
-</script>
+  </script>
 
 </body>
 </html>
