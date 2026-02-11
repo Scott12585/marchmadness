@@ -2,161 +2,156 @@
 <html>
 <head>
   <title>March Madness Leaderboard</title>
-  <link rel="icon" href="data:,">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #111;
+      background: #111827;
       color: white;
-      margin: 0;
-      padding: 20px;
       text-align: center;
     }
 
     h1 {
-      color: #f44336;
-      margin-bottom: 10px;
+      margin-top: 30px;
+      font-size: 36px;
+      color: #facc15;
     }
 
-    .summary {
+    .counts {
+      margin: 20px;
       font-size: 18px;
-      margin-bottom: 20px;
     }
 
     .section {
-      margin-top: 30px;
+      margin: 40px auto;
+      max-width: 600px;
     }
 
     .section h2 {
-      border-bottom: 2px solid #444;
-      padding-bottom: 5px;
+      border-bottom: 2px solid #facc15;
+      padding-bottom: 10px;
     }
 
     .card {
-      background: #1e1e1e;
-      padding: 12px;
-      margin: 8px auto;
-      max-width: 500px;
+      background: #1f2937;
+      padding: 15px;
+      margin: 10px 0;
       border-radius: 8px;
       display: flex;
       justify-content: space-between;
+      font-size: 16px;
     }
 
     .alive {
-      border-left: 6px solid #4caf50;
+      border-left: 6px solid #22c55e;
     }
 
     .eliminated {
-      border-left: 6px solid #e53935;
+      border-left: 6px solid #ef4444;
       opacity: 0.6;
-    }
-
-    .team {
-      font-weight: bold;
-      color: #ffcc00;
     }
   </style>
 </head>
+
 <body>
 
-  <h1>🏀 March Madness Survivor</h1>
+<h1>🏀 March Madness Leaderboard</h1>
 
-  <div class="summary" id="summary">
-    Loading...
-  </div>
+<div class="counts">
+  <span id="aliveCount"></span> |
+  <span id="eliminatedCount"></span>
+</div>
 
-  <div class="section">
-    <h2>🟢 Still Alive</h2>
-    <div id="alive-list"></div>
-  </div>
+<div class="section">
+  <h2>🔥 Still Alive</h2>
+  <div id="aliveList"></div>
+</div>
 
-  <div class="section">
-    <h2>🔴 Eliminated</h2>
-    <div id="eliminated-list"></div>
-  </div>
+<div class="section">
+  <h2>💀 Eliminated</h2>
+  <div id="eliminatedList"></div>
+</div>
 
-  <!-- Supabase (LOAD ONCE) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const supabaseUrl = "https://vlyrdolffrcpaaszjdtv.supabase.co";
+const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"; // replace this
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-  <script>
-    document.addEventListener("DOMContentLoaded", async function () {
+async function loadLeaderboard() {
 
-      const SUPABASE_URL = "https://vlyrdolffrcpaaszjdtv.supabase.co"
-      const SUPABASE_ANON_KEY = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"
-
-      const supabaseClient = window.supabase.createClient(
-        SUPABASE_URL,
-        SUPABASE_ANON_KEY
+  const { data, error } = await supabase
+    .from("team_ownership")
+    .select(`
+      entrant_id,
+      entrants (
+        name,
+        is_alive
+      ),
+      teams (
+        name
       )
+    `);
 
-      async function loadLeaderboard() {
+  if (error) {
+    console.error(error);
+    return;
+  }
 
-        const { data, error } = await supabaseClient
-          .from("entrants")
-          .select(`
-            id,
-            name,
-            is_alive,
-            teams ( name )
-          `)
-          .order("name", { ascending: true })
+  const alive = [];
+  const eliminated = [];
 
-        if (error) {
-          console.error(error)
-          document.getElementById("summary").innerText = "Error loading data"
-          return
-        }
+  data.forEach(row => {
 
-        const aliveDiv = document.getElementById("alive-list")
-        const eliminatedDiv = document.getElementById("eliminated-list")
+    if (!row.entrants) return;
 
-        aliveDiv.innerHTML = ""
-        eliminatedDiv.innerHTML = ""
+    const entry = {
+      name: row.entrants.name,
+      team: row.teams ? row.teams.name : "—",
+      is_alive: row.entrants.is_alive
+    };
 
-        let aliveCount = 0
-        let eliminatedCount = 0
+    if (entry.is_alive) {
+      alive.push(entry);
+    } else {
+      eliminated.push(entry);
+    }
 
-        data.forEach(entry => {
+  });
 
-          const teamName = entry.teams?.name || "—"
-          const card = document.createElement("div")
-          card.classList.add("card")
+  renderSection("aliveList", alive, "alive");
+  renderSection("eliminatedList", eliminated, "eliminated");
 
-          if (entry.is_alive) {
-            card.classList.add("alive")
-            aliveCount++
-          } else {
-            card.classList.add("eliminated")
-            eliminatedCount++
-          }
+  document.getElementById("aliveCount").innerText =
+    `Alive: ${alive.length}`;
 
-          card.innerHTML = `
-            <div>${entry.name}</div>
-            <div class="team">${teamName}</div>
-          `
+  document.getElementById("eliminatedCount").innerText =
+    `Eliminated: ${eliminated.length}`;
+}
 
-          if (entry.is_alive) {
-            aliveDiv.appendChild(card)
-          } else {
-            eliminatedDiv.appendChild(card)
-          }
-        })
+function renderSection(elementId, list, cssClass) {
 
-        document.getElementById("summary").innerHTML =
-          `<strong>${aliveCount}</strong> Alive | 
-           <strong>${eliminatedCount}</strong> Eliminated`
-      }
+  const container = document.getElementById(elementId);
+  container.innerHTML = "";
 
-      // Load immediately
-      loadLeaderboard()
+  list.sort((a, b) => a.name.localeCompare(b.name));
 
-      // Auto refresh every 30 seconds
-      setInterval(loadLeaderboard, 30000)
+  list.forEach(entry => {
+    container.innerHTML += `
+      <div class="card ${cssClass}">
+        <span>${entry.name}</span>
+        <span>${entry.team}</span>
+      </div>
+    `;
+  });
+}
 
-    })
-  </script>
+loadLeaderboard();
+
+// 🔄 Auto refresh every 30 seconds
+setInterval(loadLeaderboard, 30000);
+
+</script>
 
 </body>
 </html>
