@@ -1,140 +1,138 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <title>March Madness Admin</title>
-  <link rel="icon" href="data:,">
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #111827;
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-
-    .card {
-      background: #1f2937;
-      padding: 40px;
-      border-radius: 12px;
-      width: 400px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-      text-align: center;
-    }
-
-    h1 {
-      margin-bottom: 25px;
-      color: #facc15;
-    }
-
-    input {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 15px;
-      border-radius: 6px;
-      border: none;
-      font-size: 16px;
-      text-align: center;
-    }
-
-    button {
-      width: 100%;
-      padding: 12px;
-      border-radius: 6px;
-      border: none;
-      font-size: 16px;
-      cursor: pointer;
-      background: #dc2626;
-      color: white;
-      font-weight: bold;
-      transition: 0.2s;
-    }
-
-    button:hover {
-      background: #b91c1c;
-    }
-
-    button:disabled {
-      background: gray;
-      cursor: not-allowed;
-    }
-
-    #status {
-      margin-top: 15px;
-      font-size: 14px;
-    }
-
-    .success { color: #22c55e; }
-    .error { color: #ef4444; }
-  </style>
+  <title>Admin Panel</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 </head>
 <body>
 
-  <div class="card">
-    <h1>🏀 Admin Panel</h1>
+<h2>Admin – Enter Scores</h2>
 
-    <input
-      id="roundNumber"
-      type="number"
-      placeholder="Enter Round Number (1,2,3...)"
-      min="1"
-    />
+<select id="roundSelect">
+  <option value="1">Round 1</option>
+  <option value="2">Round 2</option>
+  <option value="3">Sweet 16</option>
+  <option value="4">Elite 8</option>
+  <option value="5">Final 4</option>
+  <option value="6">Championship</option>
+</select>
 
-    <button id="advanceBtn">
-      Advance Round
-    </button>
+<button onclick="loadGames()">Load Games</button>
+<button onclick="processRound()">Process Round</button>
 
-    <p id="status"></p>
-  </div>
+<div id="gamesContainer"></div>
 
-  <script type="module">
-    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+<script>
+const supabaseUrl = "https://vlyrdolffrcpaaszjdtv.supabase.co";
+const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs";
+const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-    const supabase = createClient(
-      "https://vlyrdolffrcpaaszjdtv.supabase.co",
-      "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"
-    );
+async function loadGames() {
+  const round = document.getElementById("roundSelect").value;
 
-    const button = document.getElementById("advanceBtn");
-    const status = document.getElementById("status");
+  const { data, error } = await supabase
+    .from("games")
+    .select(`
+      id,
+      spread,
+      team1:team1_id(name),
+      team2:team2_id(name),
+      team1_id,
+      team2_id
+    `)
+    .eq("round", round)
+    .order("id");
 
-    button.addEventListener("click", async () => {
+  if (error) {
+    console.error(error);
+    return;
+  }
 
-      const round = parseInt(document.getElementById("roundNumber").value);
+  const container = document.getElementById("gamesContainer");
+  container.innerHTML = "";
 
-      if (!round || round < 1) {
-        status.className = "error";
-        status.innerText = "Please enter a valid round number.";
-        return;
-      }
+  data.forEach(game => {
+    container.innerHTML += `
+      <div style="border:1px solid #ccc; padding:15px; margin:10px;">
+        <h3>${game.team1.name} vs ${game.team2.name}</h3>
+        <p>Spread: ${game.spread} (applies to Team 1)</p>
 
-      button.disabled = true;
-      status.className = "";
-      status.innerText = "Processing round...";
+        <input type="number" id="t1_${game.id}" placeholder="Team 1 Score">
+        <input type="number" id="t2_${game.id}" placeholder="Team 2 Score">
 
-      const { error } = await supabase.rpc("process_round", {
-        p_round: round
-      });
+        <button onclick="saveGame('${game.id}', '${game.team1_id}', '${game.team2_id}', ${game.spread})">
+          Save Game
+        </button>
+      </div>
+    `;
+  });
+}
 
-      if (error) {
-        status.className = "error";
-        status.innerText = error.message;
-        button.disabled = false;
-        return;
-      }
+async function saveGame(gameId, team1Id, team2Id, spread) {
 
-      status.className = "success";
-      status.innerText = `Round ${round} processed successfully.`;
+  const team1Score = parseInt(document.getElementById(`t1_${gameId}`).value);
+  const team2Score = parseInt(document.getElementById(`t2_${gameId}`).value);
 
-      // Optional: Auto refresh leaderboard page
-      // window.open('/leaderboard.html', '_blank');
+  if (isNaN(team1Score) || isNaN(team2Score)) {
+    alert("Enter both scores");
+    return;
+  }
 
-      button.disabled = false;
-    });
-  </script>
+  let winnerTeamId = null;
+  let coverTeamId = null;
+
+  // Determine winner
+  if (team1Score > team2Score) {
+    winnerTeamId = team1Id;
+  } else {
+    winnerTeamId = team2Id;
+  }
+
+  // Determine cover
+  const adjustedTeam1 = team1Score + spread;
+
+  if (adjustedTeam1 > team2Score) {
+    coverTeamId = team1Id;
+  } else {
+    coverTeamId = team2Id;
+  }
+
+  const { error } = await supabase
+    .from("games")
+    .update({
+      team1_score: team1Score,
+      team2_score: team2Score,
+      winner_team_id: winnerTeamId,
+      cover_team_id: coverTeamId
+    })
+    .eq("id", gameId);
+
+  if (error) {
+    console.error(error);
+    alert("Error saving game");
+    return;
+  }
+
+  alert("Game saved successfully");
+}
+
+async function processRound() {
+  const round = document.getElementById("roundSelect").value;
+
+  const { error } = await supabase.rpc("process_round", {
+    round_number: parseInt(round)
+  });
+
+  if (error) {
+    console.error(error);
+    alert("Error processing round");
+    return;
+  }
+
+  alert("Round processed successfully");
+}
+</script>
 
 </body>
 </html>
+
