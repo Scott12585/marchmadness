@@ -113,9 +113,9 @@
         row.innerHTML = `
           <td>${entry.name}</td>
           <td>${teamName}</td>
-          <td class="${entry.eliminated ? 'eliminated' : 'active'}">
-            ${entry.eliminated ? 'Eliminated' : 'Active'}
-          </td>
+         <td class="${entry.is_alive ? 'active' : 'eliminated'}">
+  	  ${entry.is_alive ? 'Active' : 'Eliminated'}
+	</td>
         `
 
         tableBody.appendChild(row)
