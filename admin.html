@@ -2,8 +2,12 @@
 <html>
 <head>
   <title>Admin Panel</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- ✅ Correct Supabase UMD build -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
+
 <body>
 
 <h2>Admin – Enter Scores</h2>
@@ -17,120 +21,142 @@
   <option value="6">Championship</option>
 </select>
 
-<button onclick="loadGames()">Load Games</button>
-<button onclick="processRound()">Process Round</button>
+<button id="loadBtn">Load Games</button>
+<button id="processBtn">Process Round</button>
 
 <div id="gamesContainer"></div>
 
 <script>
-const supabaseUrl = "https://vlyrdolffrcpaaszjdtv.supabase.co";
-const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs";
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+document.addEventListener("DOMContentLoaded", function () {
 
-async function loadGames() {
-  const round = document.getElementById("roundSelect").value;
+  const supabaseUrl = "https://vlyrdolffrcpaaszjdtv.supabase.co";
+  const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs";  // your anon key
 
-  const { data, error } = await supabase
-    .from("games")
-    .select(`
-      id,
-      spread,
-      team1:team1_id(name),
-      team2:team2_id(name),
-      team1_id,
-      team2_id
-    `)
-    .eq("round", round)
-    .order("id");
+  const db = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-  if (error) {
-    console.error(error);
-    return;
-  }
+  const roundSelect = document.getElementById("roundSelect");
+  const gamesContainer = document.getElementById("gamesContainer");
 
-  const container = document.getElementById("gamesContainer");
-  container.innerHTML = "";
+  document.getElementById("loadBtn").addEventListener("click", loadGames);
+  document.getElementById("processBtn").addEventListener("click", processRound);
 
-  data.forEach(game => {
-    container.innerHTML += `
-      <div style="border:1px solid #ccc; padding:15px; margin:10px;">
+  async function loadGames() {
+    const round = roundSelect.value;
+
+    const { data, error } = await db
+      .from("games")
+      .select(`
+        id,
+        spread,
+        team1:team1_id(name),
+        team2:team2_id(name),
+        team1_id,
+        team2_id
+      `)
+      .eq("round", round)
+      .order("id");
+
+    if (error) {
+      console.error(error);
+      alert("Error loading games");
+      return;
+    }
+
+    gamesContainer.innerHTML = "";
+
+    data.forEach(game => {
+
+      const gameDiv = document.createElement("div");
+      gameDiv.style.border = "1px solid #ccc";
+      gameDiv.style.padding = "15px";
+      gameDiv.style.margin = "10px";
+
+      gameDiv.innerHTML = `
         <h3>${game.team1.name} vs ${game.team2.name}</h3>
         <p>Spread: ${game.spread} (applies to Team 1)</p>
 
         <input type="number" id="t1_${game.id}" placeholder="Team 1 Score">
         <input type="number" id="t2_${game.id}" placeholder="Team 2 Score">
 
-        <button onclick="saveGame('${game.id}', '${game.team1_id}', '${game.team2_id}', ${game.spread})">
+        <button data-id="${game.id}"
+                data-team1="${game.team1_id}"
+                data-team2="${game.team2_id}"
+                data-spread="${game.spread}">
           Save Game
         </button>
-      </div>
-    `;
-  });
-}
+      `;
 
-async function saveGame(gameId, team1Id, team2Id, spread) {
+      const saveBtn = gameDiv.querySelector("button");
 
-  const team1Score = parseInt(document.getElementById(`t1_${gameId}`).value);
-  const team2Score = parseInt(document.getElementById(`t2_${gameId}`).value);
+      saveBtn.addEventListener("click", async function () {
+        await saveGame(
+          this.dataset.id,
+          this.dataset.team1,
+          this.dataset.team2,
+          parseFloat(this.dataset.spread)
+        );
+      });
 
-  if (isNaN(team1Score) || isNaN(team2Score)) {
-    alert("Enter both scores");
-    return;
+      gamesContainer.appendChild(gameDiv);
+    });
   }
 
-  let winnerTeamId = null;
-  let coverTeamId = null;
+  async function saveGame(gameId, team1Id, team2Id, spread) {
 
-  // Determine winner
-  if (team1Score > team2Score) {
-    winnerTeamId = team1Id;
-  } else {
-    winnerTeamId = team2Id;
+    const team1Score = parseInt(document.getElementById(`t1_${gameId}`).value);
+    const team2Score = parseInt(document.getElementById(`t2_${gameId}`).value);
+
+    if (isNaN(team1Score) || isNaN(team2Score)) {
+      alert("Enter both scores");
+      return;
+    }
+
+    let winnerTeamId;
+    let coverTeamId;
+
+    // Winner logic
+    winnerTeamId = team1Score > team2Score ? team1Id : team2Id;
+
+    // Cover logic (spread applies to Team 1)
+    const adjustedTeam1 = team1Score + spread;
+    coverTeamId = adjustedTeam1 > team2Score ? team1Id : team2Id;
+
+    const { error } = await db
+      .from("games")
+      .update({
+        team1_score: team1Score,
+        team2_score: team2Score,
+        winner_team_id: winnerTeamId,
+        cover_team_id: coverTeamId
+      })
+      .eq("id", gameId);
+
+    if (error) {
+      console.error(error);
+      alert("Error saving game");
+      return;
+    }
+
+    alert("Game saved successfully");
   }
 
-  // Determine cover
-  const adjustedTeam1 = team1Score + spread;
+  async function processRound() {
+    const round = parseInt(roundSelect.value);
 
-  if (adjustedTeam1 > team2Score) {
-    coverTeamId = team1Id;
-  } else {
-    coverTeamId = team2Id;
+    const { error } = await db.rpc("process_round", {
+      p_round: round   // 🔥 match your SQL parameter name exactly
+    });
+
+    if (error) {
+      console.error(error);
+      alert("Error processing round");
+      return;
+    }
+
+    alert("Round processed successfully");
   }
 
-  const { error } = await supabase
-    .from("games")
-    .update({
-      team1_score: team1Score,
-      team2_score: team2Score,
-      winner_team_id: winnerTeamId,
-      cover_team_id: coverTeamId
-    })
-    .eq("id", gameId);
-
-  if (error) {
-    console.error(error);
-    alert("Error saving game");
-    return;
-  }
-
-  alert("Game saved successfully");
-}
-
-async function processRound() {
-  const round = document.getElementById("roundSelect").value;
-
-  const { error } = await supabase.rpc("process_round", {
-    round_number: parseInt(round)
-  });
-
-  if (error) {
-    console.error(error);
-    alert("Error processing round");
-    return;
-  }
-
-  alert("Round processed successfully");
-}
+});
 </script>
 
 </body>
