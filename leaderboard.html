@@ -1,110 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8" />
   <title>Leaderboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      padding: 40px;
-      text-align: center;
-    }
-
-    h1 {
-      margin-bottom: 30px;
-    }
-
-    table {
-      margin: auto;
-      border-collapse: collapse;
-      width: 400px;
-      background: white;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-
-    th, td {
-      padding: 12px;
-      border-bottom: 1px solid #ddd;
-    }
-
-    th {
-      background: #222;
-      color: white;
-    }
-
-    .alive {
-      color: green;
-      font-weight: bold;
-    }
-
-    .eliminated {
-      color: red;
-      font-weight: bold;
-    }
-  </style>
 </head>
 <body>
 
 <h1>Leaderboard</h1>
+<div id="leaderboard">Loading...</div>
 
-<div id="error" style="color:red; margin-bottom:20px;"></div>
-
-<table>
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Status</th>
-    </tr>
-  </thead>
-  <tbody id="leaderboard-body"></tbody>
-</table>
+<!-- Load Supabase ONCE -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-  const SUPABASE_URL = "https://vlyrdolffrcpaaszjdtv.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs";
+document.addEventListener("DOMContentLoaded", async function () {
 
-  const supabase = window.supabase.createClient(
+  const SUPABASE_URL = "https://vlyrdolffrcpaaszjdtv.supabase.co"
+  const SUPABASE_ANON_KEY = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"
+
+  // CREATE CLIENT ONCE
+  const supabaseClient = window.supabase.createClient(
     SUPABASE_URL,
     SUPABASE_ANON_KEY
-  );
+  )
 
   async function loadLeaderboard() {
-    const { data, error } = await supabase
+
+    const { data, error } = await supabaseClient
       .from("entrants")
       .select("id, name, is_alive")
       .order("is_alive", { ascending: false })
-      .order("name", { ascending: true });
+      .order("name", { ascending: true })
 
     if (error) {
-      console.error(error);
-      document.getElementById("error").innerText =
-        "Error loading data: " + error.message;
-      return;
+      console.error(error)
+      document.getElementById("leaderboard").innerText =
+        "Error loading data"
+      return
     }
 
-    const tbody = document.getElementById("leaderboard-body");
-    tbody.innerHTML = "";
+    const container = document.getElementById("leaderboard")
+    container.innerHTML = ""
 
-    data.forEach((entrant) => {
-      const row = document.createElement("tr");
-
-      const nameCell = document.createElement("td");
-      nameCell.textContent = entrant.name;
-
-      const statusCell = document.createElement("td");
-      statusCell.textContent = entrant.is_alive ? "Alive" : "Eliminated";
-      statusCell.className = entrant.is_alive ? "alive" : "eliminated";
-
-      row.appendChild(nameCell);
-      row.appendChild(statusCell);
-      tbody.appendChild(row);
-    });
+    data.forEach(entry => {
+      const row = document.createElement("div")
+      row.innerHTML = `
+        <strong>${entry.name}</strong> -
+        ${entry.is_alive ? "🟢 Alive" : "🔴 Eliminated"}
+      `
+      container.appendChild(row)
+    })
   }
 
-  loadLeaderboard();
+  loadLeaderboard()
+
+})
 </script>
 
 </body>
 </html>
+
