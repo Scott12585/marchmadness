@@ -75,12 +75,21 @@
 
 <script>
 const supabaseUrl = "https://vlyrdolffrcpaaszjdtv.supabase.co";
-const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs"; // replace this
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const supabaseKey = "sb_publishable_N3lv1OFRTCeRhmuyRMzbAg_D-_mPxPs";
+
+// ✅ Only create client if it doesn’t already exist
+if (!window.supabaseClient) {
+  window.supabaseClient = window.supabase.createClient(
+    supabaseUrl,
+    supabaseKey
+  );
+}
+
+const db = window.supabaseClient;
 
 async function loadLeaderboard() {
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("team_ownership")
     .select(`
       entrant_id,
@@ -111,11 +120,8 @@ async function loadLeaderboard() {
       is_alive: row.entrants.is_alive
     };
 
-    if (entry.is_alive) {
-      alive.push(entry);
-    } else {
-      eliminated.push(entry);
-    }
+    if (entry.is_alive) alive.push(entry);
+    else eliminated.push(entry);
 
   });
 
@@ -147,10 +153,7 @@ function renderSection(elementId, list, cssClass) {
 }
 
 loadLeaderboard();
-
-// 🔄 Auto refresh every 30 seconds
 setInterval(loadLeaderboard, 30000);
-
 </script>
 
 </body>
